@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>CL Combine Tracker</title>
+<style>
+  :root{
+    --blueprint:#0f2942; --blueprint-deep:#0a1d30;
+    --grid-line:rgba(255,255,255,0.06); --grid-line-strong:rgba(255,255,255,0.12);
+    --paper:#f4f0e6; --ink:#e9edf2; --ink-dim:#9db0c4;
+    --amber:#e0a326; --safety-green:#4a9e6b; --safety-red:#c15a4a; --stamp-blue:#5c8fc4;
+    --mono:'IBM Plex Mono','SF Mono',Consolas,monospace; --sans:'IBM Plex Sans',-apple-system,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--blueprint);
+    background-image:
+      linear-gradient(var(--grid-line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid-line) 1px, transparent 1px),
+      linear-gradient(var(--grid-line-strong) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid-line-strong) 1px, transparent 1px);
+    background-size:8px 8px, 8px 8px, 40px 40px, 40px 40px;
+    font-family:var(--sans); color:var(--ink); min-height:100vh; padding:28px 20px 60px;
+  }
+  .sheet{max-width:1000px; margin:0 auto;}
+  .titleblock{border:1px solid var(--grid-line-strong); border-bottom:2px solid var(--stamp-blue); padding:16px 20px; display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:12px; margin-bottom:22px;}
+  .titleblock h1{margin:0; font-family:var(--mono); font-weight:600; font-size:20px; letter-spacing:0.04em; text-transform:uppercase;}
+  .titleblock .sub{font-family:var(--mono); font-size:11px; color:var(--ink-dim); letter-spacing:0.03em; margin-top:4px;}
+  .titleblock .rev{font-family:var(--mono); font-size:11px; color:var(--stamp-blue); text-align:right; line-height:1.6;}
+  .tabs{display:flex; gap:2px; margin-bottom:18px; flex-wrap:wrap;}
+  .tab{font-family:var(--mono); font-size:12px; letter-spacing:0.05em; text-transform:uppercase; padding:10px 16px; background:var(--blueprint-deep); border:1px solid var(--grid-line-strong); color:var(--ink-dim); cursor:pointer; border-bottom:none;}
+  .tab.active{color:var(--paper); background:transparent; border-bottom:2px solid var(--paper); margin-bottom:-1px;}
+  .panel{display:none;} .panel.active{display:block;}
+  .card{background:rgba(244,240,230,0.03); border:1px solid var(--grid-line-strong); padding:20px; margin-bottom:16px;}
+  .card h2{font-family:var(--mono); font-size:13px; text-transform:uppercase; letter-spacing:0.05em; color:var(--stamp-blue); margin:0 0 16px 0; padding-bottom:8px; border-bottom:1px solid var(--grid-line-strong);}
+  label{display:block; font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.05em; color:var(--ink-dim); margin-bottom:5px;}
+  .field{margin-bottom:14px;}
+  .row{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
+  .row3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px;}
+  .row4{display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:14px;}
+  @media(max-width:640px){.row,.row3,.row4{grid-template-columns:1fr;}}
+  input[type=text], input[type=number], input[type=date], textarea, select{width:100%; background:var(--blueprint-deep); border:1px solid var(--grid-line-strong); color:var(--ink); font-family:var(--sans); font-size:13px; padding:9px 10px; outline:none;}
+  input:focus, textarea:focus, select:focus{border-color:var(--stamp-blue);}
+  textarea{resize:vertical; min-height:56px;}
+  .btn{font-family:var(--mono); font-size:11px; text-transform:uppercase; letter-spacing:0.05em; padding:10px 20px; background:var(--stamp-blue); color:var(--blueprint-deep); border:none; cursor:pointer; font-weight:600;}
+  .btn:hover{filter:brightness(1.1);}
+  .btn.secondary{background:transparent; color:var(--ink-dim); border:1px solid var(--grid-line-strong);}
+  .theory{border:1px solid var(--grid-line-strong); border-left:3px solid var(--stamp-blue); padding:14px 16px; margin-bottom:12px;}
+  .theory.confirmed{border-left-color:var(--safety-green);} .theory.rejected{border-left-color:var(--safety-red);}
+  .theory-top{display:flex; justify-content:space-between; align-items:flex-start; gap:10px;}
+  .theory-name{font-family:var(--mono); font-weight:600; font-size:14px; color:var(--paper);}
+  .theory-src{font-family:var(--mono); font-size:10px; color:var(--stamp-blue); text-transform:uppercase; letter-spacing:0.03em; margin-top:2px;}
+  .stamp{font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.08em; padding:3px 8px; border:1px solid currentColor; white-space:nowrap;}
+  .stamp.pending{color:var(--amber);} .stamp.confirmed{color:var(--safety-green);} .stamp.rejected{color:var(--safety-red);}
+  .theory-meta{font-family:var(--mono); font-size:11px; color:var(--ink-dim); margin-top:6px;}
+  .theory-body{font-size:13px; color:var(--ink); margin-top:10px; line-height:1.5;}
+  .theory-body .k{color:var(--ink-dim); font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.04em; display:block; margin-top:8px;}
+  .empty{font-family:var(--mono); font-size:12px; color:var(--ink-dim); padding:30px; text-align:center; border:1px dashed var(--grid-line-strong);}
+  table{width:100%; border-collapse:collapse; font-size:12px;}
+  th{font-family:var(--mono); text-transform:uppercase; font-size:10px; letter-spacing:0.04em; color:var(--ink-dim); text-align:left; padding:8px 8px; border-bottom:1px solid var(--grid-line-strong);}
+  td{padding:9px 8px; border-bottom:1px solid var(--grid-line); color:var(--ink);}
+  .tag{font-family:var(--mono); font-size:10px; padding:2px 6px; border:1px solid currentColor;}
+  .tag.win{color:var(--safety-green);} .tag.loss{color:var(--safety-red);} .tag.scratch{color:var(--ink-dim);}
+  .tag.up{color:var(--safety-green);} .tag.down{color:var(--safety-red);}
+  .stat-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:12px;}
+  @media(max-width:640px){.stat-grid{grid-template-columns:repeat(2,1fr);}}
+  .stat{border:1px solid var(--grid-line-strong); padding:14px; text-align:center;}
+  .stat.warn{border-color:var(--safety-red);}
+  .stat.good{border-color:var(--safety-green);}
+  .stat .num{font-family:var(--mono); font-size:24px; color:var(--paper); font-weight:600;}
+  .stat .lbl{font-family:var(--mono); font-size:10px; color:var(--ink-dim); text-transform:uppercase; margin-top:4px;}
+  .actions{display:flex; gap:8px; margin-top:16px;}
+  .del{background:none; border:none; color:var(--ink-dim); font-family:var(--mono); font-size:10px; cursor:pointer; text-transform:uppercase;}
+  .del:hover{color:var(--safety-red);}
+  .status-select{width:auto; display:inline-block;}
+  .msg{font-family:var(--mono); font-size:11px; color:var(--ink-dim); margin-top:10px;}
+  .msg.warn{color:var(--safety-red);}
+  .calc-result{border:1px solid var(--stamp-blue); background:rgba(92,143,196,0.08); padding:18px; margin-top:6px;}
+  .calc-result .line{display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid var(--grid-line); font-family:var(--mono); font-size:13px;}
+  .calc-result .line:last-child{border-bottom:none;}
+  .calc-result .line .v{color:var(--paper); font-weight:600;}
+  .calc-result .line.warn .v{color:var(--safety-red);}
+  .calc-result .line.good .v{color:var(--safety-green);}
+  .spec-note{font-family:var(--mono); font-size:10px; color:var(--ink-dim); margin-top:6px;}
+  .banner{border:1px solid var(--amber); background:rgba(224,163,38,0.08); padding:12px 16px; font-family:var(--mono); font-size:11px; color:var(--amber); margin-bottom:16px;}
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <div class="titleblock">
+    <div>
+      <h1>CL Combine Tracker</h1>
+      <div class="sub">crude oil futures &middot; evaluation-stage risk &amp; hypothesis register</div>
+    </div>
+    <div class="rev">GOAL: FIRST FUNDED ACCOUNT<br>SCALE: SURVIVE &gt; MAXIMIZE</div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="combine">Combine</div>
+    <div class="tab" data-tab="calc">Calculator</div>
+    <div class="tab" data-tab="sig">Significance</div>
+    <div class="tab" data-tab="scanner">Scanner</div>
+    <div class="tab" data-tab="theories">Theories</div>
+    <div class="tab" data-tab="log">Trade Log</div>
+    <div class="tab" data-tab="stats">Stats</div>
+  </div>
+
+  <!-- COMBINE -->
+  <div class="panel active" id="panel-combine">
+    <div class="card">
+      <h2>Evaluation setup — pull these numbers from your Topstep dashboard, not from memory</h2>
+      <div class="row4">
+        <div class="field"><label>Starting balance ($)</label><input type="number" id="cb-start" value="50000"></div>
+        <div class="field"><label>Profit target ($)</label><input type="number" id="cb-target" value="3000"></div>
+        <div class="field"><label>Max drawdown ($)</label><input type="number" id="cb-drawdown" value="2000"></div>
+        <div class="field">
+          <label>Drawdown type</label>
+          <select id="cb-ddtype">
+            <option value="eod-trailing">EOD trailing (locks at start balance once target hit)</option>
+            <option value="intraday-trailing">Intraday trailing</option>
+            <option value="static">Static (fixed floor)</option>
+          </select>
+        </div>
+      </div>
+      <div class="row4">
+        <div class="field"><label>Daily loss limit ($)</label><input type="number" id="cb-dailyloss" value="1000"></div>
+        <div class="field"><label>Consistency cap — best day as % of total profit</label><input type="number" id="cb-consistency" value="50"></div>
+        <div class="field"><label>CL contract limit (max contracts allowed)</label><input type="number" id="cb-contractlimit" value="3"></div>
+        <div class="field"><label>Target trading days (your pace goal, not a rule)</label><input type="number" id="cb-targetdays" value="20"></div>
+      </div>
+      <button class="btn" onclick="saveCombineSetup()">Save setup</button>
+      <div class="msg" id="combine-setup-msg"></div>
+    </div>
+
+    <div class="card">
+      <h2>Status</h2>
+      <div class="stat-grid" id="combine-status"></div>
+      <div class="banner" id="combine-banner" style="display:none;"></div>
+    </div>
+
+    <div class="card">
+      <h2>Pacing</h2>
+      <div class="stat-grid" id="combine-pacing"></div>
+      <div class="msg">This is a pace guide, not a rule — Topstep doesn't require daily trading, and a zero-trade day on no setup is better than a forced one.</div>
+    </div>
+
+    <div class="card">
+      <h2>Daily log — add your end-of-day balance after each session</h2>
+      <div class="row3">
+        <div class="field"><label>Date</label><input type="date" id="cb-day-date"></div>
+        <div class="field"><label>EOD balance ($)</label><input type="number" id="cb-day-balance" step="any"></div>
+        <div class="field" style="display:flex; align-items:flex-end;"><button class="btn" onclick="addDay()">Log day</button></div>
+      </div>
+      <div id="combine-days"></div>
+    </div>
+    <div class="card">
+      <h2>Session reference — Pacific</h2>
+      <table>
+        <thead><tr><th>Pacific</th><th>Eastern</th><th>What happens</th></tr></thead>
+        <tbody>
+          <tr><td>6:00am</td><td>9:00am</td><td>CL regular trading hours open — most volume concentrates from here</td></tr>
+          <tr><td>~7:15–7:30am</td><td>~10:15–10:30am</td><td>EIA Weekly Petroleum Status Report (Wed only) — most reliable scheduled CL volatility event</td></tr>
+          <tr><td>11:30am</td><td>2:30pm</td><td>CL RTH close / settlement window</td></tr>
+          <tr><td>1:30pm</td><td>4:30pm</td><td>API inventory estimate (Tue, after hours — unofficial precursor to Wed EIA)</td></tr>
+          <tr><td>2:00–3:00pm</td><td>5:00–6:00pm</td><td><strong>Daily maintenance halt — market closed, not just quiet</strong></td></tr>
+          <tr><td>3:00pm</td><td>6:00pm</td><td>Next session opens</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- SCANNER -->
+  <div class="panel" id="panel-scanner">
+    <div class="card">
+      <h2>Conditional pattern scanner</h2>
+      <div class="msg" style="margin-bottom:14px;">
+        Upload 15-minute OHLC bars as CSV (columns: date,time,open,high,low,close — time as HH:MM in one consistent timezone, 24hr). For each time-of-day slot, this computes P(next candle up | prior candle was up) and P(next candle up | prior candle was down), tests each against a 50% baseline, and applies a Bonferroni correction for the number of slots tested — so it won't lie to you about how many "patterns" are just chance. Get historical CL bars from your broker's export, TradingView, or CME DataMine; this tool can't fetch them itself.
+      </div>
+      <input type="file" id="scan-file" accept=".csv" onchange="handleScanFile(event)">
+      <div class="msg" id="scan-msg" style="margin-top:10px;"></div>
+      <div id="scan-results"></div>
+    </div>
+  </div>
+  <!-- CALCULATOR -->
+  <div class="panel" id="panel-calc">
+    <div class="card">
+      <h2>CL position size, stop &amp; target</h2>
+      <div class="row3">
+        <div class="field"><label>Tick size ($ per barrel)</label><input type="number" id="c-ticksize" value="0.01" step="any"></div>
+        <div class="field"><label>$ value per tick</label><input type="number" id="c-tickvalue" value="10.00" step="any"></div>
+        <div class="field"><label>Specs last verified</label><input type="date" id="c-verified"></div>
+      </div>
+      <div class="spec-note">Standard CL (1,000 bbl contract): tick 0.01 = $10. Micro MCL (100 bbl): tick 0.01 = $1 — switch the two fields above if you're trading MCL. Re-check against your platform periodically; exchange specs can change.</div>
+
+      <div class="row4" style="margin-top:14px;">
+        <div class="field">
+          <label>Risk source</label>
+          <select id="c-risksource" onchange="toggleRiskFields()">
+            <option value="fixed">Fixed $ amount</option>
+            <option value="pct-balance">% of starting balance</option>
+            <option value="pct-buffer">% of current Combine buffer</option>
+            <option value="daily-remaining">Remaining daily loss limit today</option>
+          </select>
+        </div>
+        <div class="field" id="c-fixed-field"><label>Fixed $ risk</label><input type="number" id="c-fixedrisk" value="500"></div>
+        <div class="field" id="c-pct-field" style="display:none;"><label>Risk %</label><input type="number" id="c-riskpct" value="1" step="0.1"></div>
+        <div class="field" id="c-todaypnl-field" style="display:none;"><label>Today's realized P&amp;L so far ($, negative if down)</label><input type="number" id="c-todaypnl" value="0"></div>
+      </div>
+
+      <div class="row3">
+        <div class="field"><label>Entry price</label><input type="number" id="c-entry" step="any"></div>
+        <div class="field"><label>Stop price (structure-based)</label><input type="number" id="c-stop" step="any"></div>
+        <div class="field"><label>Target R multiple (e.g. 2 = 2R)</label><input type="number" id="c-rmultiple" value="2" step="0.1"></div>
+      </div>
+      <button class="btn" onclick="calculate()">Calculate</button>
+      <div class="calc-result" id="calc-result" style="display:none;"></div>
+    </div>
+  </div>
+
+  <!-- SIGNIFICANCE -->
+  <div class="panel" id="panel-sig">
+    <div class="card">
+      <h2>Is this pattern real, or could it be chance?</h2>
+      <div class="row3">
+        <div class="field"><label>Total observations (days/occurrences)</label><input type="number" id="sig-n" placeholder="e.g. 45"></div>
+        <div class="field"><label>Times the pattern happened (the win count)</label><input type="number" id="sig-wins" placeholder="e.g. 27"></div>
+        <div class="field"><label>Baseline / null rate (%) — usually 50 for a directional coin flip</label><input type="number" id="sig-null" value="50"></div>
+      </div>
+      <button class="btn" onclick="calcSignificance()">Test it</button>
+      <div class="calc-result" id="sig-result" style="display:none;"></div>
+      <div class="msg" style="margin-top:14px;">This only answers "is this distinguishable from chance." It does not check for multiple-comparison bias (did you test many windows and pick the best one?) or confirm a real mechanism — both matter as much as the math. And this checks your <em>discovery</em> sample; the real test is whether the rate holds on data collected <em>after</em> you found the pattern.</div>
+    </div>
+  </div>
+
+  <!-- THEORIES -->
+  <div class="panel" id="panel-theories">
+    <div class="card">
+      <h2>New theory</h2>
+      <div class="field"><label>Pattern name</label><input type="text" id="th-name" placeholder="e.g. EIA draw fade, VWAP reclaim"></div>
+      <div class="field"><label>Framework / source (optional)</label><input type="text" id="th-source" placeholder="e.g. Classic ORB, EIA inventory reaction, SMC/ICT"></div>
+      <div class="field"><label>What you believe happens, and why (the mechanism)</label><textarea id="th-rationale"></textarea></div>
+      <div class="row">
+        <div class="field"><label>Confirmation criteria</label><textarea id="th-confirm"></textarea></div>
+        <div class="field"><label>Invalidation</label><textarea id="th-invalid"></textarea></div>
+      </div>
+      <button class="btn" onclick="addTheory()">Add theory</button>
+    </div>
+    <div id="theory-list"></div>
+  </div>
+
+  <!-- TRADE LOG -->
+  <div class="panel" id="panel-log">
+    <div class="card">
+      <h2>Log a trade against a theory</h2>
+      <div class="row3">
+        <div class="field"><label>Date</label><input type="date" id="tr-date"></div>
+        <div class="field"><label>Contracts</label><input type="number" id="tr-contracts" value="1"></div>
+        <div class="field"><label>Theory</label><select id="tr-theory"></select></div>
+      </div>
+      <div class="row3">
+        <div class="field"><label>Entry</label><input type="number" step="any" id="tr-entry"></div>
+        <div class="field"><label>Stop</label><input type="number" step="any" id="tr-stop"></div>
+        <div class="field"><label>Target</label><input type="number" step="any" id="tr-target"></div>
+      </div>
+      <div class="row3">
+        <div class="field"><label>Result</label><select id="tr-result"><option value="win">Win</option><option value="loss">Loss</option><option value="scratch">Scratch</option></select></div>
+        <div class="field"><label>Points against you before it went your way</label><input type="number" step="any" id="tr-adverse" placeholder="0 if never"></div>
+        <div class="field"><label>Direction call correct?</label><select id="tr-direction-right"><option value="yes">Yes</option><option value="no">No</option></select></div>
+      </div>
+      <div class="row">
+        <div class="field"><label>Max favorable move reached (points, even if you exited earlier)</label><input type="number" step="any" id="tr-favorable" placeholder="how far it ran before reversing"></div>
+      </div>
+      <div class="field"><label>Confirmation criteria you actually observed (write it out — if you can't, it wasn't a real setup)</label><textarea id="tr-checklist" placeholder="e.g. price closed below the OR low on volume 1.5x the OR average, and stayed below VWAP"></textarea></div>
+      <div class="field"><label>Note</label><textarea id="tr-note"></textarea></div>
+      <button class="btn" onclick="addTrade()">Log trade</button>
+      <div class="msg" id="log-msg"></div>
+    </div>
+    <div class="card"><h2>Recent trades</h2><div id="trade-table"></div></div>
+  </div>
+
+  <!-- STATS -->
+  <div class="panel" id="panel-stats">
+    <div class="card"><h2>Overall</h2><div class="stat-grid" id="overall-stats"></div></div>
+    <div class="card"><h2>By theory</h2><div id="theory-stats"></div></div>
+    <div class="card"><h2>Stopped out but direction was right</h2><div id="scared-out-stats"></div></div>
+  </div>
+
+</div>
+
+<script>
+// ============================================================
+// Backed by Google Sheets via Apps Script — fill these in after deploying Code.gs
+// ============================================================
+const API_URL = 'https://script.google.com/macros/s/AKfycbw0SZUEz9ZkVRg2MQ69dvGMj-OuZSNfQ9fbcw92mZ6v4gWK_vydB6y9IKQVluBETDOYXw/exec';
+const API_TOKEN = 'H9CF8CkOLD4AOsJaXyhzBhRxjy-23YrC'; // must match TOKEN in Code.gs
+
+window.storage = {
+  async get(key){
+    const res = await fetch(`${API_URL}?action=get&key=${encodeURIComponent(key)}&token=${encodeURIComponent(API_TOKEN)}`);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    if (data.value === null || data.value === undefined || data.value === '') throw new Error('not found');
+    return { key, value: data.value };
+  },
+  async set(key, value){
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // text/plain avoids a CORS preflight Apps Script can't handle
+      body: JSON.stringify({ action: 'set', key, value, token: API_TOKEN })
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    return { key, value };
+  },
+  async delete(key){
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'delete', key, token: API_TOKEN })
+    });
+    return await res.json();
+  },
+  async list(prefix){
+    const res = await fetch(`${API_URL}?action=list&prefix=${encodeURIComponent(prefix||'')}&token=${encodeURIComponent(API_TOKEN)}`);
+    return await res.json();
+  }
+};
+const STARTER_THEORIES = [
+  {
+    name:'EIA Inventory Reaction',
+    source:'CL-specific — Weekly Petroleum Status Report',
+    rationale:'The EIA releases official U.S. crude inventory data every Wednesday at 10:30am ET (preceded by the API\'s unofficial estimate Tuesday 4:30pm ET, after hours). A surprise versus consensus in the draw/build number causes a sharp initial spike as the market prices in the surprise; that first spike is often driven by fast money and stop triggers rather than the full digestion of the number, and can partially retrace in the following 30-90 minutes before the "real" reaction sets in.',
+    confirm:'Wait for the initial 1-5 minute spike to complete, then look for the retrace to stall or reverse with a clear structure level, rather than entering into the first tick of the release.',
+    invalid:'Price continues cleanly in the initial spike direction with no meaningful retrace — that\'s the real reaction, not noise to fade.',
+    status:'pending'
+  },
+  {
+    name:'Opening Range Breakout (ORB)',
+    source:'Classic ORB (Crabel-style)',
+    rationale:'The first 15–30 minutes after the pit-hours open concentrate the most information-rich order flow of the session — overnight Globex positioning, news reactions, and the first wave of institutional orders resolve in that window. A decisive break of that range, confirmed by volume, tends to indicate the side that won the early battle.',
+    confirm:'Candle closes beyond the OR high/low (not just a wick), on volume above the average of the OR candles.',
+    invalid:'A close back inside the range, or a breakout on thin volume with no follow-through within 1-2 candles.',
+    status:'pending'
+  },
+  {
+    name:'VWAP Mean Reversion',
+    source:'VWAP deviation / mean reversion',
+    rationale:'VWAP is the volume-weighted average price for the session and functions as a benchmark for institutional execution. In range-bound, non-trending conditions, price extended far from VWAP without volume support tends to get pulled back toward it.',
+    confirm:'Price tags an outer VWAP deviation band with a rejection candle, in the middle of the session — avoid the open and the EIA release window.',
+    invalid:'Price closes beyond the band with strong volume, or the session is trending, not ranging.',
+    status:'pending'
+  },
+  {
+    name:'Liquidity Sweep Reversal',
+    source:'SMC / ICT framework',
+    rationale:'Obvious swing highs and lows are where stop orders and breakout entries cluster. A sharp move through that level that fails to hold and reverses suggests the move served to clear resting liquidity rather than starting a genuine trend — traditional technical analysis calls the same pattern a false breakout or trap.',
+    confirm:'A quick wick through a clearly-marked prior high/low on thin follow-through volume, followed by a close back inside the prior range within a candle or two.',
+    invalid:'A close and hold beyond the swept level with real volume.',
+    status:'pending'
+  }
+];
+
+let combine = null;
+let theories = [];
+let trades = [];
+
+const DEFAULT_COMBINE = {
+  start:50000, target:3000, drawdown:2000, ddtype:'eod-trailing',
+  dailyloss:1000, consistency:50, contractlimit:3, targetdays:20, days:[]
+};
+
+async function load(){
+  try{
+    const c = await window.storage.get('combine', false);
+    combine = c ? JSON.parse(c.value) : Object.assign({}, DEFAULT_COMBINE);
+  }catch(e){ combine = Object.assign({}, DEFAULT_COMBINE); }
+  populateCombineForm();
+
+  try{
+    const t = await window.storage.get('theories', false);
+    theories = t ? JSON.parse(t.value) : [];
+  }catch(e){ theories = []; }
+  if(theories.length === 0){
+    theories = STARTER_THEORIES.map(t => Object.assign({id: Date.now().toString(36)+Math.random().toString(36).slice(2,6), created:new Date().toISOString().slice(0,10)}, t));
+    await saveTheories();
+  }
+
+  try{
+    const tr = await window.storage.get('trades', false);
+    trades = tr ? JSON.parse(tr.value) : [];
+  }catch(e){ trades = []; }
+
+  render();
+  toggleRiskFields();
+}
+
+async function saveCombine(){ await window.storage.set('combine', JSON.stringify(combine), false); }
+async function saveTheories(){ await window.storage.set('theories', JSON.stringify(theories), false); }
+async function saveTrades(){ await window.storage.set('trades', JSON.stringify(trades), false); }
+
+document.querySelectorAll('.tab').forEach(tab=>{
+  tab.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('panel-'+tab.dataset.tab).classList.add('active');
+    if(tab.dataset.tab==='stats') renderStats();
+    if(tab.dataset.tab==='combine') renderCombine();
+  });
+});
+
+function populateCombineForm(){
+  document.getElementById('cb-start').value = combine.start;
+  document.getElementById('cb-target').value = combine.target;
+  document.getElementById('cb-drawdown').value = combine.drawdown;
+  document.getElementById('cb-ddtype').value = combine.ddtype;
+  document.getElementById('cb-dailyloss').value = combine.dailyloss;
+  document.getElementById('cb-consistency').value = combine.consistency;
+  document.getElementById('cb-contractlimit').value = combine.contractlimit;
+  document.getElementById('cb-targetdays').value = combine.targetdays || 20;
+}
+
+async function saveCombineSetup(){
+  combine.start = parseFloat(document.getElementById('cb-start').value) || 0;
+  combine.target = parseFloat(document.getElementById('cb-target').value) || 0;
+  combine.drawdown = parseFloat(document.getElementById('cb-drawdown').value) || 0;
+  combine.ddtype = document.getElementById('cb-ddtype').value;
+  combine.dailyloss = parseFloat(document.getElementById('cb-dailyloss').value) || 0;
+  combine.consistency = parseFloat(document.getElementById('cb-consistency').value) || 50;
+  combine.contractlimit = parseFloat(document.getElementById('cb-contractlimit').value) || 1;
+  combine.targetdays = parseFloat(document.getElementById('cb-targetdays').value) || 20;
+  await saveCombine();
+  document.getElementById('combine-setup-msg').textContent = 'Saved.';
+  setTimeout(()=>document.getElementById('combine-setup-msg').textContent='', 1500);
+  renderCombine();
+}
+
+async function addDay(){
+  const date = document.getElementById('cb-day-date').value;
+  const balance = parseFloat(document.getElementById('cb-day-balance').value);
+  if(!date || isNaN(balance)) return;
+  combine.days = combine.days.filter(d=>d.date!==date);
+  combine.days.push({date, balance});
+  combine.days.sort((a,b)=>a.date.localeCompare(b.date));
+  await saveCombine();
+  document.getElementById('cb-day-balance').value='';
+  renderCombine();
+}
+
+async function deleteDay(date){
+  combine.days = combine.days.filter(d=>d.date!==date);
+  await saveCombine();
+  renderCombine();
+}
+
+function computeCombineStatus(){
+  const days = combine.days;
+  const latestBalance = days.length ? days[days.length-1].balance : combine.start;
+  const highWaterMark = Math.max(combine.start, ...days.map(d=>d.balance));
+  const lockedTarget = combine.start + combine.target;
+  let floor;
+  if(combine.ddtype === 'static'){
+    floor = combine.start - combine.drawdown;
+  } else {
+    floor = highWaterMark - combine.drawdown;
+    if(highWaterMark >= lockedTarget){
+      floor = combine.start;
+    }
+    floor = Math.max(floor, combine.start - combine.drawdown);
+  }
+  const buffer = latestBalance - floor;
+  const progressPct = combine.target ? ((latestBalance - combine.start) / combine.target) * 100 : 0;
+  const totalProfit = latestBalance - combine.start;
+
+  let bestDayProfit = 0;
+  for(let i=0;i<days.length;i++){
+    const prev = i===0 ? combine.start : days[i-1].balance;
+    const dayPnl = days[i].balance - prev;
+    if(dayPnl > bestDayProfit) bestDayProfit = dayPnl;
+  }
+  const consistencyPct = totalProfit > 0 ? (bestDayProfit / totalProfit) * 100 : 0;
+  const consistencyFlag = totalProfit > 0 && consistencyPct > combine.consistency;
+
+  return {latestBalance, highWaterMark, floor, buffer, progressPct, totalProfit, bestDayProfit, consistencyPct, consistencyFlag, daysCount: days.length};
+}
+
+function renderCombine(){
+  const s = computeCombineStatus();
+  const el = document.getElementById('combine-status');
+  el.innerHTML = `
+    <div class="stat"><div class="num">$${s.latestBalance.toFixed(0)}</div><div class="lbl">Current balance</div></div>
+    <div class="stat ${s.buffer < 500 ? 'warn' : 'good'}"><div class="num">$${s.buffer.toFixed(0)}</div><div class="lbl">Buffer above floor</div></div>
+    <div class="stat"><div class="num">$${s.floor.toFixed(0)}</div><div class="lbl">Trailing floor</div></div>
+    <div class="stat ${s.progressPct>=100?'good':''}"><div class="num">${s.progressPct.toFixed(0)}%</div><div class="lbl">Progress to target</div></div>
+  `;
+  const banner = document.getElementById('combine-banner');
+  if(s.buffer < 500 && s.daysCount > 0){
+    banner.style.display='block';
+    banner.textContent = `Buffer is under $500. At this size, one bad trade can end the Combine — trade minimum size only, or sit out until you've rebuilt cushion.`;
+  } else if(s.consistencyFlag){
+    banner.style.display='block';
+    banner.textContent = `Your best single day is ${s.consistencyPct.toFixed(0)}% of total profit — above your ${combine.consistency}% consistency cap. Spread profit across more days before requesting a payout, if this rule applies to your plan.`;
+  } else {
+    banner.style.display='none';
+  }
+
+  renderPacing(s);
+
+  const daysEl = document.getElementById('combine-days');
+  if(combine.days.length === 0){
+    daysEl.innerHTML = '<div class="empty">No days logged yet.</div>';
+    return;
+  }
+  const rows = combine.days.slice().reverse().map((d,idx)=>{
+    const i = combine.days.length - 1 - idx;
+    const prev = i===0 ? combine.start : combine.days[i-1].balance;
+    const pnl = d.balance - prev;
+    return `<tr>
+      <td>${d.date}</td><td>$${d.balance.toFixed(0)}</td>
+      <td><span class="tag ${pnl>=0?'up':'down'}">${pnl>=0?'+':''}${pnl.toFixed(0)}</span></td>
+      <td><button class="del" onclick="deleteDay('${d.date}')">del</button></td>
+    </tr>`;
+  }).join('');
+  daysEl.innerHTML = `<table><thead><tr><th>Date</th><th>EOD Balance</th><th>Day P&amp;L</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function renderPacing(s){
+  const targetDays = combine.targetdays || 20;
+  const daysElapsed = s.daysCount;
+  const daysRemaining = Math.max(0, targetDays - daysElapsed);
+  const remainingProfit = Math.max(0, combine.target - s.totalProfit);
+  const neededPerDay = daysRemaining > 0 ? remainingProfit / daysRemaining : (remainingProfit > 0 ? remainingProfit : 0);
+  const currentPace = daysElapsed > 0 ? s.totalProfit / daysElapsed : null;
+  let estDaysToFinish = 'n/a';
+  if(s.totalProfit >= combine.target){
+    estDaysToFinish = 'target reached';
+  } else if(currentPace !== null && currentPace > 0){
+    estDaysToFinish = Math.ceil(remainingProfit / currentPace) + ' more days';
+  }
+
+  const el = document.getElementById('combine-pacing');
+  el.innerHTML = `
+    <div class="stat"><div class="num">${daysElapsed}</div><div class="lbl">Days elapsed</div></div>
+    <div class="stat"><div class="num">${daysRemaining}</div><div class="lbl">Days left in pace plan</div></div>
+    <div class="stat ${neededPerDay > 300 ? 'warn':''}"><div class="num">$${neededPerDay.toFixed(0)}</div><div class="lbl">$ needed per remaining day</div></div>
+    <div class="stat"><div class="num">${currentPace===null ? 'n/a' : '$'+currentPace.toFixed(0)}</div><div class="lbl">Current $/day pace</div></div>
+  `;
+  el.insertAdjacentHTML('beforeend', `<div class="stat" style="grid-column:1/-1;"><div class="num">${estDaysToFinish}</div><div class="lbl">Estimated days to target at current pace</div></div>`);
+}
+
+function toggleRiskFields(){
+  const src = document.getElementById('c-risksource').value;
+  document.getElementById('c-fixed-field').style.display = src==='fixed' ? 'block':'none';
+  document.getElementById('c-pct-field').style.display = src==='pct-balance' ? 'block':'none';
+  document.getElementById('c-todaypnl-field').style.display = src==='daily-remaining' ? 'block':'none';
+}
+
+function calculate(){
+  const tickSize = parseFloat(document.getElementById('c-ticksize').value);
+  const tickValue = parseFloat(document.getElementById('c-tickvalue').value);
+  const entry = parseFloat(document.getElementById('c-entry').value);
+  const stop = parseFloat(document.getElementById('c-stop').value);
+  const rMultiple = parseFloat(document.getElementById('c-rmultiple').value) || 1;
+  const src = document.getElementById('c-risksource').value;
+
+  const result = document.getElementById('calc-result');
+  result.style.display = 'block';
+
+  if(!tickSize || !tickValue || isNaN(entry) || isNaN(stop) || entry === stop){
+    result.innerHTML = '<div class="line warn"><span>Error</span><span class="v">Fill in entry, stop, and tick spec (all must be valid, entry &ne; stop).</span></div>';
+    return;
+  }
+
+  let dollarRisk = 0;
+  const s = computeCombineStatus();
+  if(src === 'fixed'){
+    dollarRisk = parseFloat(document.getElementById('c-fixedrisk').value) || 0;
+  } else if(src === 'pct-balance'){
+    const pct = parseFloat(document.getElementById('c-riskpct').value) || 0;
+    dollarRisk = combine.start * (pct/100);
+  } else if(src === 'pct-buffer'){
+    dollarRisk = Math.max(0, s.buffer) * 0.25;
+  } else if(src === 'daily-remaining'){
+    const todayPnl = parseFloat(document.getElementById('c-todaypnl').value) || 0;
+    dollarRisk = Math.max(0, combine.dailyloss + todayPnl);
+  }
+
+  const stopDistance = Math.abs(entry - stop);
+  const stopTicks = stopDistance / tickSize;
+  const riskPerContract = stopTicks * tickValue;
+  let maxContracts = Math.floor(dollarRisk / riskPerContract);
+  const contractCapped = maxContracts > combine.contractlimit;
+  if(contractCapped) maxContracts = combine.contractlimit;
+  const actualRisk = maxContracts * riskPerContract;
+
+  const direction = entry > stop ? 1 : -1;
+  const targetDistance = stopDistance * rMultiple;
+  const target = entry + (direction * targetDistance);
+  const rewardPerContract = riskPerContract * rMultiple;
+  const totalReward = maxContracts * rewardPerContract;
+
+  let html = '';
+  html += line('Risk budget used', `$${dollarRisk.toFixed(2)}`);
+  html += line('Stop distance', `${stopDistance.toFixed(4)} pts / ${stopTicks.toFixed(1)} ticks`);
+  html += line('$ risk per contract', `$${riskPerContract.toFixed(2)}`);
+  html += line('Max contracts (risk-based)', `${Math.floor(dollarRisk / riskPerContract)}`);
+  html += line('Combine contract limit', `${combine.contractlimit}`, contractCapped ? 'warn':'');
+  html += line('Contracts to trade', `${maxContracts}`, maxContracts < 1 ? 'warn' : 'good');
+  html += line('Actual $ risked', `$${actualRisk.toFixed(2)}`);
+  html += line(`Target (${rMultiple}R)`, `${target.toFixed(4)}`);
+  html += line('Potential $ reward', `$${totalReward.toFixed(2)}`);
+
+  if(maxContracts < 1){
+    html += '<div class="line warn"><span>Note</span><span class="v">Stop is too wide for this risk budget. Widen the risk source, find a tighter valid stop, or consider MCL instead of CL.</span></div>';
+  }
+  if(contractCapped){
+    html += '<div class="line warn"><span>Note</span><span class="v">Risk budget would allow more contracts, but your Combine contract limit caps it here.</span></div>';
+  }
+
+  result.innerHTML = html;
+}
+
+function line(label, value, cls){
+  return `<div class="line ${cls||''}"><span>${label}</span><span class="v">${value}</span></div>`;
+}
+
+function erf(x){
+  // Abramowitz-Stegun approximation
+  const sign = x < 0 ? -1 : 1;
+  x = Math.abs(x);
+  const a1=0.254829592, a2=-0.284496736, a3=1.421413741, a4=-1.453152027, a5=1.061405429, p=0.3275911;
+  const t = 1/(1+p*x);
+  const y = 1 - (((((a5*t+a4)*t)+a3)*t+a2)*t+a1)*t*Math.exp(-x*x);
+  return sign*y;
+}
+function normalCdf(z){ return 0.5*(1+erf(z/Math.sqrt(2))); }
+
+function calcSignificance(){
+  const n = parseFloat(document.getElementById('sig-n').value);
+  const wins = parseFloat(document.getElementById('sig-wins').value);
+  const p0 = (parseFloat(document.getElementById('sig-null').value) || 50) / 100;
+  const result = document.getElementById('sig-result');
+  result.style.display = 'block';
+
+  if(!n || n <= 0 || isNaN(wins) || wins < 0 || wins > n){
+    result.innerHTML = '<div class="line warn"><span>Error</span><span class="v">Enter a valid observation count and win count (wins ≤ n).</span></div>';
+    return;
+  }
+
+  const pHat = wins / n;
+  const seNull = Math.sqrt(p0 * (1-p0) / n);
+  const z = (pHat - p0) / seNull;
+  const pValue = 2 * (1 - normalCdf(Math.abs(z)));
+  const seObs = Math.sqrt(pHat * (1-pHat) / n);
+  const ciLow = Math.max(0, pHat - 1.96*seObs);
+  const ciHigh = Math.min(1, pHat + 1.96*seObs);
+  const significant = pValue < 0.05;
+  const ciExcludesNull = ciLow > p0 || ciHigh < p0;
+
+  let html = '';
+  html += line('Observed rate', `${(pHat*100).toFixed(1)}%`);
+  html += line('95% confidence interval', `${(ciLow*100).toFixed(1)}% – ${(ciHigh*100).toFixed(1)}%`);
+  html += line('Baseline (null) rate', `${(p0*100).toFixed(1)}%`);
+  html += line('z-score', z.toFixed(2));
+  html += line('p-value (two-tailed)', pValue.toFixed(4), significant ? 'good':'warn');
+  html += line('Distinguishable from chance at 95% confidence?', significant && ciExcludesNull ? 'Yes' : 'No', (significant && ciExcludesNull) ? 'good':'warn');
+
+  if(!significant || !ciExcludesNull){
+    html += '<div class="line warn"><span>Read</span><span class="v">At this sample size, this result is consistent with pure chance. Keep collecting data before trusting it, and don\'t trade it live yet.</span></div>';
+  } else {
+    html += '<div class="line good"><span>Read</span><span class="v">Statistically distinguishable from chance — but still confirm a real mechanism, rule out multiple-comparison bias, and validate on data collected after this point before trading it live.</span></div>';
+  }
+
+  result.innerHTML = html;
+}
+
+function handleScanFile(evt){
+  const file = evt.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => runScanner(e.target.result);
+  reader.readAsText(file);
+}
+
+function runScanner(csvText){
+  const msgEl = document.getElementById('scan-msg');
+  const resEl = document.getElementById('scan-results');
+  resEl.innerHTML = '';
+  const lines = csvText.trim().split('\n').map(l=>l.trim()).filter(l=>l);
+  if(lines.length < 2){ msgEl.textContent = 'No data found in file.'; return; }
+
+  const header = lines[0].toLowerCase();
+  const startIdx = header.includes('date') && header.includes('time') ? 1 : 0;
+
+  const bars = [];
+  for(let i=startIdx; i<lines.length; i++){
+    const parts = lines[i].split(',').map(p=>p.trim());
+    if(parts.length < 6) continue;
+    const [date, time, open, high, low, close] = parts;
+    const o = parseFloat(open), c = parseFloat(close);
+    if(isNaN(o) || isNaN(c)) continue;
+    bars.push({date, time, open:o, close:c, up: c > o});
+  }
+
+  if(bars.length < 20){ msgEl.textContent = `Only found ${bars.length} valid bars — need a lot more (at least a few hundred) for this to mean anything.`; return; }
+
+  const byDate = {};
+  bars.forEach(b => { if(!byDate[b.date]) byDate[b.date] = []; byDate[b.date].push(b); });
+
+  const slots = {};
+  Object.values(byDate).forEach(dayBars => {
+    dayBars.sort((a,b)=> a.time.localeCompare(b.time));
+    for(let i=1; i<dayBars.length; i++){
+      const prev = dayBars[i-1];
+      const cur = dayBars[i];
+      if(!slots[cur.time]) slots[cur.time] = { prevUp:{n:0,wins:0}, prevDown:{n:0,wins:0} };
+      const bucket = prev.up ? slots[cur.time].prevUp : slots[cur.time].prevDown;
+      bucket.n++;
+      if(cur.up) bucket.wins++;
+    }
+  });
+
+  const times = Object.keys(slots).sort();
+  const numTests = times.length * 2;
+  const correctedAlpha = 0.05 / numTests;
+
+  const results = [];
+  times.forEach(t => {
+    ['prevUp','prevDown'].forEach(cond => {
+      const b = slots[t][cond];
+      if(b.n < 15) return;
+      const pHat = b.wins / b.n;
+      const seNull = Math.sqrt(0.5*0.5/b.n);
+      const z = (pHat - 0.5) / seNull;
+      const pValue = 2 * (1 - normalCdf(Math.abs(z)));
+      results.push({time:t, condition: cond==='prevUp' ? 'prior candle up' : 'prior candle down', n:b.n, rate:pHat, pValue, significant: pValue < correctedAlpha});
+    });
+  });
+
+  results.sort((a,b)=>a.pValue-b.pValue);
+  const survivors = results.filter(r=>r.significant);
+
+  msgEl.textContent = `${bars.length} bars across ${Object.keys(byDate).length} days, ${times.length} time slots, ${numTests} tests run. Bonferroni-corrected significance threshold: p < ${correctedAlpha.toFixed(6)} (vs. the usual 0.05 — corrected because testing this many slots means chance alone produces false positives at the normal threshold).`;
+
+  let html = `<div class="stat-grid" style="margin-top:14px;">
+    <div class="stat"><div class="num">${results.length}</div><div class="lbl">Slots tested (n&ge;15)</div></div>
+    <div class="stat ${survivors.length>0?'good':''}"><div class="num">${survivors.length}</div><div class="lbl">Survive correction</div></div>
+  </div>`;
+
+  if(survivors.length === 0){
+    html += '<div class="empty">Nothing survived the corrected threshold — consistent with what you suspected: mostly noise. That\'s a real result, not a failure of the scan. Consider testing structurally-justified times specifically (open, EIA window, close) with more data rather than scanning blind.</div>';
+  } else {
+    html += `<table style="margin-top:10px;"><thead><tr><th>Time</th><th>Condition</th><th>N</th><th>Rate</th><th>p-value</th></tr></thead><tbody>
+      ${survivors.map(r=>`<tr><td>${r.time}</td><td>${r.condition}</td><td>${r.n}</td><td>${(r.rate*100).toFixed(1)}%</td><td>${r.pValue.toFixed(6)}</td></tr>`).join('')}
+    </tbody></table>
+    <div class="msg">These survived correction for how many slots were tested — but still confirm a real mechanism before trusting them, and validate on fresh data collected after this point, not just the sample that found them.</div>`;
+  }
+  resEl.innerHTML = html;
+}
+
+async function addTheory(){
+  const name = document.getElementById('th-name').value.trim();
+  const source = document.getElementById('th-source').value.trim();
+  const rationale = document.getElementById('th-rationale').value.trim();
+  const confirm = document.getElementById('th-confirm').value.trim();
+  const invalid = document.getElementById('th-invalid').value.trim();
+  if(!name || !rationale){ return; }
+  theories.push({id: Date.now().toString(36), name, source, rationale, confirm, invalid, status:'pending', created:new Date().toISOString().slice(0,10)});
+  document.getElementById('th-name').value='';
+  document.getElementById('th-source').value='';
+  document.getElementById('th-rationale').value='';
+  document.getElementById('th-confirm').value='';
+  document.getElementById('th-invalid').value='';
+  await saveTheories();
+  render();
+}
+
+async function deleteTheory(id){ theories = theories.filter(t=>t.id!==id); await saveTheories(); render(); }
+async function setStatus(id, status){ const t = theories.find(t=>t.id===id); if(t){ t.status = status; await saveTheories(); render(); } }
+
+async function addTrade(){
+  const theoryId = document.getElementById('tr-theory').value;
+  if(!theoryId){ document.getElementById('log-msg').textContent = 'Add a theory first.'; return; }
+  const trade = {
+    id: Date.now().toString(36),
+    date: document.getElementById('tr-date').value || new Date().toISOString().slice(0,10),
+    contracts: document.getElementById('tr-contracts').value,
+    theoryId,
+    entry: document.getElementById('tr-entry').value,
+    stop: document.getElementById('tr-stop').value,
+    target: document.getElementById('tr-target').value,
+    result: document.getElementById('tr-result').value,
+    adverse: parseFloat(document.getElementById('tr-adverse').value)||0,
+    favorable: parseFloat(document.getElementById('tr-favorable').value)||0,
+    directionRight: document.getElementById('tr-direction-right').value,
+    checklist: document.getElementById('tr-checklist').value.trim(),
+    note: document.getElementById('tr-note').value.trim()
+  };
+  trades.unshift(trade);
+  ['tr-entry','tr-stop','tr-target','tr-adverse','tr-favorable','tr-checklist','tr-note'].forEach(id=>document.getElementById(id).value='');
+  await saveTrades();
+  document.getElementById('log-msg').textContent = 'Logged.';
+  setTimeout(()=>document.getElementById('log-msg').textContent='', 1500);
+  render();
+}
+
+async function deleteTrade(id){ trades = trades.filter(t=>t.id!==id); await saveTrades(); render(); }
+
+function render(){ renderTheoryOptions(); renderTheoryList(); renderTradeTable(); }
+
+function renderTheoryOptions(){
+  const sel = document.getElementById('tr-theory');
+  sel.innerHTML = theories.length ? theories.map(t=>`<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('') : '<option value="">No theories yet</option>';
+}
+
+function renderTheoryList(){
+  const el = document.getElementById('theory-list');
+  if(theories.length===0){ el.innerHTML = '<div class="empty">No theories logged yet.</div>'; return; }
+  el.innerHTML = theories.map(t=>{
+    const n = trades.filter(tr=>tr.theoryId===t.id).length;
+    return `
+    <div class="theory ${t.status}">
+      <div class="theory-top">
+        <div>
+          <div class="theory-name">${escapeHtml(t.name)}</div>
+          ${t.source ? `<div class="theory-src">${escapeHtml(t.source)}</div>` : ''}
+          <div class="theory-meta">logged ${t.created} &middot; ${n} trade${n===1?'':'s'} recorded</div>
+        </div>
+        <span class="stamp ${t.status}">${t.status}</span>
+      </div>
+      <div class="theory-body">
+        ${escapeHtml(t.rationale)}
+        ${t.confirm ? `<span class="k">Confirmation</span>${escapeHtml(t.confirm)}` : ''}
+        ${t.invalid ? `<span class="k">Invalidation</span>${escapeHtml(t.invalid)}` : ''}
+      </div>
+      <div class="actions">
+        <select class="status-select" onchange="setStatus('${t.id}', this.value)">
+          <option value="pending" ${t.status==='pending'?'selected':''}>Pending</option>
+          <option value="confirmed" ${t.status==='confirmed'?'selected':''}>Confirmed</option>
+          <option value="rejected" ${t.status==='rejected'?'selected':''}>Rejected</option>
+        </select>
+        <button class="del" onclick="deleteTheory('${t.id}')">Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function dayType(dateStr){
+  if(!dateStr) return '';
+  const d = new Date(dateStr + 'T12:00:00');
+  const day = d.getDay(); // 0=Sun ... 3=Wed, 2=Tue
+  if(day === 3) return 'EIA day';
+  if(day === 2) return 'API eve';
+  return '';
+}
+
+function renderTradeTable(){
+  const el = document.getElementById('trade-table');
+  if(trades.length===0){ el.innerHTML = '<div class="empty">No trades logged yet.</div>'; return; }
+  const rows = trades.slice(0,50).map(tr=>{
+    const theory = theories.find(t=>t.id===tr.theoryId);
+    const dt = dayType(tr.date);
+    return `<tr>
+      <td>${tr.date}${dt ? ` <span class="tag" style="color:var(--amber);">${dt}</span>`:''}</td><td>${tr.contracts||1}</td>
+      <td>${theory?escapeHtml(theory.name):'(deleted)'}</td>
+      <td><span class="tag ${tr.result}">${tr.result}</span></td>
+      <td>${tr.adverse}</td><td>${tr.favorable||0}</td><td>${tr.directionRight==='yes'?'right':'wrong'}</td>
+      <td>${tr.checklist ? '<span class="tag win">yes</span>' : '<span class="tag loss">none</span>'}</td>
+      <td><button class="del" onclick="deleteTrade('${tr.id}')">del</button></td>
+    </tr>`;
+  }).join('');
+  el.innerHTML = `<table><thead><tr><th>Date</th><th>Ctrs</th><th>Theory</th><th>Result</th><th>Adverse</th><th>Favorable</th><th>Direction</th><th>Reason logged</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function renderStats(){
+  const total = trades.length;
+  const wins = trades.filter(t=>t.result==='win').length;
+  const losses = trades.filter(t=>t.result==='loss').length;
+  const winRate = total ? Math.round((wins/total)*100) : 0;
+  const avgAdverse = total ? (trades.reduce((s,t)=>s+t.adverse,0)/total).toFixed(2) : '0';
+
+  document.getElementById('overall-stats').innerHTML = `
+    <div class="stat"><div class="num">${total}</div><div class="lbl">Trades logged</div></div>
+    <div class="stat"><div class="num">${winRate}%</div><div class="lbl">Win rate</div></div>
+    <div class="stat"><div class="num">${losses}</div><div class="lbl">Losses</div></div>
+    <div class="stat"><div class="num">${avgAdverse}</div><div class="lbl">Avg adverse move</div></div>`;
+
+  const byTheory = theories.map(t=>{
+    const tt = trades.filter(tr=>tr.theoryId===t.id);
+    const w = tt.filter(tr=>tr.result==='win').length;
+    const wr = tt.length ? Math.round((w/tt.length)*100) : null;
+    const avgFav = tt.length ? (tt.reduce((s,tr)=>s+(tr.favorable||0),0)/tt.length).toFixed(2) : '—';
+    const avgAdv = tt.length ? (tt.reduce((s,tr)=>s+(tr.adverse||0),0)/tt.length).toFixed(2) : '—';
+    return {name:t.name, count:tt.length, wr, avgFav, avgAdv};
+  }).filter(t=>t.count>0);
+
+  document.getElementById('theory-stats').innerHTML = byTheory.length
+    ? `<table><thead><tr><th>Theory</th><th># Trades</th><th>Win rate</th><th>Avg favorable move</th><th>Avg adverse move</th></tr></thead><tbody>${byTheory.map(t=>`<tr><td>${escapeHtml(t.name)}</td><td>${t.count}</td><td>${t.wr}%</td><td>${t.avgFav}</td><td>${t.avgAdv}</td></tr>`).join('')}</tbody></table>
+      <div class="msg">Avg favorable move is a rough guide for where a realistic target sits for this theory — not the biggest move you've ever seen, the typical one.</div>`
+    : '<div class="empty">Log trades against theories to see this.</div>';
+
+  const scaredOut = trades.filter(t=>t.result==='loss' && t.directionRight==='yes');
+  document.getElementById('scared-out-stats').innerHTML = scaredOut.length
+    ? `<table><thead><tr><th>Date</th><th>Theory</th><th>Adverse move</th></tr></thead><tbody>${scaredOut.map(t=>{
+        const theory = theories.find(th=>th.id===t.theoryId);
+        return `<tr><td>${t.date}</td><td>${theory?escapeHtml(theory.name):'&mdash;'}</td><td>${t.adverse}</td></tr>`;
+      }).join('')}</tbody></table>
+      <div class="msg">These are the trades worth reviewing — direction call was correct, but you were stopped before it played out.</div>`
+    : '<div class="empty">None yet — or not enough trades logged to see the pattern.</div>';
+}
+
+function escapeHtml(s){ const d = document.createElement('div'); d.textContent = s||''; return d.innerHTML; }
+
+load();
+</script>
+</body>
+</html>
