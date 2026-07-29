@@ -143,6 +143,23 @@
 
   .step-title{font-family:var(--mono); font-size:10.5px; color:var(--sub); text-align:center; margin-bottom:10px; letter-spacing:1px; text-transform:uppercase;}
 
+  /* ---- iOS-style scale toggle ---- */
+  .scaleToggleRow{display:flex; align-items:center; justify-content:center; gap:10px; margin-bottom:12px;}
+  .scaleLabel{font-family:var(--mono); font-size:10.5px; letter-spacing:0.5px; text-transform:uppercase; color:var(--sub); transition:color .15s ease;}
+  .iosSwitch{position:relative; display:inline-block; width:42px; height:24px; flex-shrink:0;}
+  .iosSwitch input{opacity:0; width:0; height:0; position:absolute;}
+  .iosSlider{
+    position:absolute; inset:0; cursor:pointer;
+    background:var(--panel2); border:1px solid var(--border-strong);
+    border-radius:24px; transition:background .15s ease, border-color .15s ease;
+  }
+  .iosSlider::before{
+    content:''; position:absolute; height:16px; width:16px; left:3px; top:3px;
+    background:var(--text); border-radius:50%; transition:transform .15s ease;
+  }
+  .iosSwitch input:checked + .iosSlider{background:var(--accent); border-color:var(--accent);}
+  .iosSwitch input:checked + .iosSlider::before{transform:translateX(18px); background:#04070f;}
+
   .outcome-btn{padding:14px 6px; font-size:13.5px;}
   .outcome-btn.win{background:var(--green-dim); border:1px solid var(--green); color:var(--green);}
   .outcome-btn.win.selected{background:var(--green); color:#031b10;}
@@ -233,6 +250,14 @@
   <!-- STEP 2: CANDLES -->
   <div class="card">
     <h2><span class="num">2</span>First 3 Candles &mdash; drag to shape (1 tick = $10)</h2>
+    <div class="scaleToggleRow">
+      <span class="scaleLabel" id="scaleLabelNormal" style="color:var(--text);">Normal</span>
+      <label class="iosSwitch">
+        <input type="checkbox" id="scaleToggle" onchange="setScale(this.checked ? 'wide' : 'normal')">
+        <span class="iosSlider"></span>
+      </label>
+      <span class="scaleLabel" id="scaleLabelWide">Wide (big moves)</span>
+    </div>
     <div class="chartOuter">
       <div class="axisCol" id="axisCol"></div>
       <div class="chartArea" id="chartArea">
@@ -308,13 +333,14 @@
 
 <script>
 // ====== CONFIGURE THIS ======
-const WEB_APP_URL = "PASTE_YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE";
+const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbx6Y1brem7z2MVREvu4M5_2UEGAYzPQiYkvS7b7y8YkL7irm8ndUKEzR5-ewIBlKn8/exec";
 // =============================
 
-const TICK_PX = 4;          // pixels per tick
-const RANGE_TICKS = 65;     // ticks shown above/below zero
-const HEIGHT = RANGE_TICKS * TICK_PX * 2;
+const HEIGHT = 520;
 const CENTER = HEIGHT / 2;
+const SCALES = { normal: 65, wide: 300 }; // ticks shown above/below zero
+let RANGE_TICKS = SCALES.normal;
+let TICK_PX = HEIGHT / (RANGE_TICKS * 2);
 
 function yFromTick(t){ return CENTER - (t * TICK_PX); }
 function tickFromY(y){ return Math.round((CENTER - y) / TICK_PX); }
@@ -377,17 +403,23 @@ function updateTimeDisplay(){
 
 // ---------- axis ----------
 const axisCol = document.getElementById('axisCol');
-for(let t=-RANGE_TICKS; t<=RANGE_TICKS; t+=10){
-  const lab = document.createElement('div');
-  lab.className='axisLabel';
-  lab.style.top = yFromTick(t)+'px';
-  lab.textContent = (t===0?'0':((t>0?'+':'')+t));
-  axisCol.appendChild(lab);
-  const grid = document.createElement('div');
-  grid.className='gridline';
-  grid.style.top = yFromTick(t)+'px';
-  document.getElementById('chartArea').appendChild(grid);
+function buildAxis(){
+  axisCol.innerHTML = '';
+  document.querySelectorAll('.gridline').forEach(el=>el.remove());
+  const step = RANGE_TICKS <= 65 ? 10 : 50;
+  for(let t=-RANGE_TICKS; t<=RANGE_TICKS; t+=step){
+    const lab = document.createElement('div');
+    lab.className='axisLabel';
+    lab.style.top = yFromTick(t)+'px';
+    lab.textContent = (t===0?'0':((t>0?'+':'')+t));
+    axisCol.appendChild(lab);
+    const grid = document.createElement('div');
+    grid.className='gridline';
+    grid.style.top = yFromTick(t)+'px';
+    document.getElementById('chartArea').appendChild(grid);
+  }
 }
+buildAxis();
 document.getElementById('zeroLine').style.top = CENTER+'px';
 
 // ---------- candles ----------
@@ -601,6 +633,19 @@ function checkReady(){
 }
 
 function resetAll(){ location.reload(); }
+
+function setScale(mode){
+  RANGE_TICKS = SCALES[mode];
+  TICK_PX = HEIGHT / (RANGE_TICKS * 2);
+  buildAxis();
+  for(let n=1;n<=3;n++) redrawCandle(n);
+  if(state.tradeCardRevealed){
+    showEntryLine();
+    updateTargetStop();
+  }
+  document.getElementById('scaleLabelNormal').style.color = mode==='normal' ? 'var(--text)' : 'var(--sub)';
+  document.getElementById('scaleLabelWide').style.color = mode==='wide' ? 'var(--text)' : 'var(--sub)';
+}
 
 function toggleInstructions(){
   document.getElementById('instrPanel').classList.toggle('open');
